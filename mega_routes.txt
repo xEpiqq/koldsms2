@@ -1,0 +1,2641 @@
+
+/app/(auth-pages)/forgot-password/page.tsx
+import { forgotPasswordAction } from "@/app/actions";
+import { FormMessage, Message } from "@/components/form-message";
+import { SubmitButton } from "@/components/submit-button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import { SmtpMessage } from "../smtp-message";
+
+export default async function ForgotPassword(props: {
+  searchParams: Promise<Message>;
+}) {
+  const searchParams = await props.searchParams;
+  return (
+    <>
+      <form className="flex-1 flex flex-col w-full gap-2 text-foreground [&>input]:mb-6 min-w-64 max-w-64 mx-auto">
+        <div>
+          <h1 className="text-2xl font-medium">Reset Password</h1>
+          <p className="text-sm text-secondary-foreground">
+            Already have an account?{" "}
+            <Link className="text-primary underline" href="/sign-in">
+              Sign in
+            </Link>
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 [&>input]:mb-3 mt-8">
+          <Label htmlFor="email">Email</Label>
+          <Input name="email" placeholder="you@example.com" required />
+          <SubmitButton formAction={forgotPasswordAction}>
+            Reset Password
+          </SubmitButton>
+          <FormMessage message={searchParams} />
+        </div>
+      </form>
+      <SmtpMessage />
+    </>
+  );
+}
+
+
+/app/(auth-pages)/layout.tsx
+export default async function Layout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="max-w-7xl flex flex-col gap-12 items-start">{children}</div>
+  );
+}
+
+
+/app/(auth-pages)/sign-in/page.tsx
+import { signInAction } from "@/app/actions";
+import { FormMessage, Message } from "@/components/form-message";
+import { SubmitButton } from "@/components/submit-button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import Link from "next/link";
+
+export default async function Login(props: { searchParams: Promise<Message> }) {
+  const searchParams = await props.searchParams;
+  return (
+    <form className="flex-1 flex flex-col min-w-64">
+      <h1 className="text-2xl font-medium">Sign in</h1>
+      <p className="text-sm text-foreground">
+        Don't have an account?{" "}
+        <Link className="text-foreground font-medium underline" href="/sign-up">
+          Sign up
+        </Link>
+      </p>
+      <div className="flex flex-col gap-2 [&>input]:mb-3 mt-8">
+        <Label htmlFor="email">Email</Label>
+        <Input name="email" placeholder="you@example.com" required />
+        <div className="flex justify-between items-center">
+          <Label htmlFor="password">Password</Label>
+          <Link
+            className="text-xs text-foreground underline"
+            href="/forgot-password"
+          >
+            Forgot Password?
+          </Link>
+        </div>
+        <Input
+          type="password"
+          name="password"
+          placeholder="Your password"
+          required
+        />
+        <SubmitButton pendingText="Signing In..." formAction={signInAction}>
+          Sign in
+        </SubmitButton>
+        <FormMessage message={searchParams} />
+      </div>
+    </form>
+  );
+}
+
+
+/app/(auth-pages)/sign-up/page.tsx
+import { signUpAction } from "@/app/actions";
+import { FormMessage, Message } from "@/components/form-message";
+import { SubmitButton } from "@/components/submit-button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import { SmtpMessage } from "../smtp-message";
+
+export default async function Signup(props: {
+  searchParams: Promise<Message>;
+}) {
+  const searchParams = await props.searchParams;
+  if ("message" in searchParams) {
+    return (
+      <div className="w-full flex-1 flex items-center h-screen sm:max-w-md justify-center gap-2 p-4">
+        <FormMessage message={searchParams} />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <form className="flex flex-col min-w-64 max-w-64 mx-auto">
+        <h1 className="text-2xl font-medium">Sign up</h1>
+        <p className="text-sm text text-foreground">
+          Already have an account?{" "}
+          <Link className="text-primary font-medium underline" href="/sign-in">
+            Sign in
+          </Link>
+        </p>
+        <div className="flex flex-col gap-2 [&>input]:mb-3 mt-8">
+          <Label htmlFor="email">Email</Label>
+          <Input name="email" placeholder="you@example.com" required />
+          <Label htmlFor="password">Password</Label>
+          <Input
+            type="password"
+            name="password"
+            placeholder="Your password"
+            minLength={6}
+            required
+          />
+          <SubmitButton formAction={signUpAction} pendingText="Signing up...">
+            Sign up
+          </SubmitButton>
+          <FormMessage message={searchParams} />
+        </div>
+      </form>
+      <SmtpMessage />
+    </>
+  );
+}
+
+
+/app/(auth-pages)/smtp-message.tsx
+import { ArrowUpRight, InfoIcon } from "lucide-react";
+import Link from "next/link";
+
+export function SmtpMessage() {
+  return (
+    <div className="bg-muted/50 px-5 py-3 border rounded-md flex gap-4">
+      <InfoIcon size={16} className="mt-0.5" />
+      <div className="flex flex-col gap-1">
+        <small className="text-sm text-secondary-foreground">
+          <strong> Note:</strong> Emails are rate limited. Enable Custom SMTP to
+          increase the rate limit.
+        </small>
+        <div>
+          <Link
+            href="https://supabase.com/docs/guides/auth/auth-smtp"
+            target="_blank"
+            className="text-primary/50 hover:text-primary flex items-center text-sm gap-1"
+          >
+            Learn more <ArrowUpRight size={14} />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/app/actions.ts
+"use server";
+
+import { encodedRedirect } from "@/utils/utils";
+import { createClient } from "@/utils/supabase/server";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+export const signUpAction = async (formData: FormData) => {
+  const email = formData.get("email")?.toString();
+  const password = formData.get("password")?.toString();
+  const supabase = await createClient();
+  const origin = (await headers()).get("origin");
+
+  if (!email || !password) {
+    return encodedRedirect(
+      "error",
+      "/sign-up",
+      "Email and password are required",
+    );
+  }
+
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: `${origin}/auth/callback`,
+    },
+  });
+
+  if (error) {
+    console.error(error.code + " " + error.message);
+    return encodedRedirect("error", "/sign-up", error.message);
+  } else {
+    return encodedRedirect(
+      "success",
+      "/sign-up",
+      "Thanks for signing up! Please check your email for a verification link.",
+    );
+  }
+};
+
+export const signInAction = async (formData: FormData) => {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+  const supabase = await createClient();
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    return encodedRedirect("error", "/sign-in", error.message);
+  }
+
+  return redirect("/protected");
+};
+
+export const forgotPasswordAction = async (formData: FormData) => {
+  const email = formData.get("email")?.toString();
+  const supabase = await createClient();
+  const origin = (await headers()).get("origin");
+  const callbackUrl = formData.get("callbackUrl")?.toString();
+
+  if (!email) {
+    return encodedRedirect("error", "/forgot-password", "Email is required");
+  }
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?redirect_to=/protected/reset-password`,
+  });
+
+  if (error) {
+    console.error(error.message);
+    return encodedRedirect(
+      "error",
+      "/forgot-password",
+      "Could not reset password",
+    );
+  }
+
+  if (callbackUrl) {
+    return redirect(callbackUrl);
+  }
+
+  return encodedRedirect(
+    "success",
+    "/forgot-password",
+    "Check your email for a link to reset your password.",
+  );
+};
+
+export const resetPasswordAction = async (formData: FormData) => {
+  const supabase = await createClient();
+
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  if (!password || !confirmPassword) {
+    encodedRedirect(
+      "error",
+      "/protected/reset-password",
+      "Password and confirm password are required",
+    );
+  }
+
+  if (password !== confirmPassword) {
+    encodedRedirect(
+      "error",
+      "/protected/reset-password",
+      "Passwords do not match",
+    );
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: password,
+  });
+
+  if (error) {
+    encodedRedirect(
+      "error",
+      "/protected/reset-password",
+      "Password update failed",
+    );
+  }
+
+  encodedRedirect("success", "/protected/reset-password", "Password updated");
+};
+
+export const signOutAction = async () => {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  return redirect("/sign-in");
+};
+
+
+/app/auth/callback/route.ts
+import { createClient } from "@/utils/supabase/server";
+import { NextResponse } from "next/server";
+
+export async function GET(request: Request) {
+  // The `/auth/callback` route is required for the server-side auth flow implemented
+  // by the SSR package. It exchanges an auth code for the user's session.
+  // https://supabase.com/docs/guides/auth/server-side/nextjs
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code");
+  const origin = requestUrl.origin;
+  const redirectTo = requestUrl.searchParams.get("redirect_to")?.toString();
+
+  if (code) {
+    const supabase = await createClient();
+    await supabase.auth.exchangeCodeForSession(code);
+  }
+
+  if (redirectTo) {
+    return NextResponse.redirect(`${origin}${redirectTo}`);
+  }
+
+  // URL to redirect to after sign up process completes
+  return NextResponse.redirect(`${origin}/protected`);
+}
+
+
+/app/layout.tsx
+import DeployButton from "@/components/deploy-button";
+import { EnvVarWarning } from "@/components/env-var-warning";
+import HeaderAuth from "@/components/header-auth";
+import { ThemeSwitcher } from "@/components/theme-switcher";
+import { hasEnvVars } from "@/utils/supabase/check-env-vars";
+import { Geist } from "next/font/google";
+import { ThemeProvider } from "next-themes";
+import Link from "next/link";
+import "./globals.css";
+
+const defaultUrl = process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}`
+  : "http://localhost:3000";
+
+export const metadata = {
+  metadataBase: new URL(defaultUrl),
+  title: "Koldsms - 1000 Texts Per Day",
+  description: "The fastest way to get clients",
+};
+
+const geistSans = Geist({
+  display: "swap",
+  subsets: ["latin"],
+});
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html>
+      <body cz-shortcut-listen="true">
+      <div>
+      {children}
+      </div>
+      </body>
+    </html>
+  );
+}
+
+
+/app/page.tsx
+import { signInAction } from "@/app/actions";
+import { FormMessage, Message } from "@/components/form-message";
+import { SubmitButton } from "@/components/submit-button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import Link from "next/link";
+
+export default async function Login() {
+  return (
+    <div className="w-full flex h-screen justify-center items-center">
+    <div className="w-96 -mt-32">
+    <form className="flex-1 flex flex-col min-w-64">
+      <h1 className="text-2xl font-medium">Sign in to KoldSMS</h1>
+      <p className="text-sm text-foreground">
+        Don't have an account?{" "}
+        <Link className="text-foreground font-medium underline" href="/sign-up">
+          Sign up
+        </Link>
+      </p>
+      <div className="flex flex-col gap-2 [&>input]:mb-3 mt-8">
+        <Label htmlFor="email">Email</Label>
+        <Input name="email" placeholder="you@example.com" required />
+        <div className="flex justify-between items-center">
+          <Label htmlFor="password">Password</Label>
+          <Link
+            className="text-xs text-foreground underline"
+            href="/forgot-password"
+          >
+            Forgot Password?
+          </Link>
+        </div>
+        <Input
+          type="password"
+          name="password"
+          placeholder="Your password"
+          required
+        />
+        <SubmitButton pendingText="Signing In..." formAction={signInAction}>
+          Sign in
+        </SubmitButton>
+      </div>
+    </form>
+    </div>
+    </div>
+  );
+}
+
+
+/app/protected/campaigns/campaigns-list.jsx
+"use client";
+
+import React from "react";
+import { Heading, Text } from "@/components/heading";
+import { Button } from "@/components/button";
+import {
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableHeader,
+  TableCell,
+} from "@/components/table";
+import { Badge } from "@/components/badge";
+import { Checkbox } from "@/components/checkbox";
+import {
+  Dropdown,
+  DropdownButton,
+  DropdownItem,
+  DropdownMenu,
+  DropdownLabel,
+} from "@/components/dropdown";
+import {
+  EllipsisHorizontalIcon,
+  PencilIcon,
+  TrashIcon,
+  DocumentDuplicateIcon,
+  ArrowDownTrayIcon,
+  ShareIcon,
+} from "@heroicons/react/16/solid";
+
+export default function CampaignsList({
+  campaigns,
+  setView,
+  renameCampaign,
+  deleteCampaign,
+  duplicateCampaign,
+  downloadAnalyticsCSV,
+  shareCampaign,
+  setSelectedCampaignId,
+  setWizardStep,
+}) {
+  function getStatusColor(status) {
+    switch (status) {
+      case "active":
+        return "green";
+      case "paused":
+        return "orange";
+      case "draft":
+      default:
+        return "zinc";
+    }
+  }
+
+  return (
+    <div style={{ padding: "1rem" }}>
+      <Heading>All Campaigns</Heading>
+      <div style={{ marginTop: "1rem", marginBottom: "1.5rem" }}>
+        <Button color="blue" onClick={() => setView("new")}>
+          Start New Campaign
+        </Button>
+      </div>
+
+      <Table bleed className="[--gutter:--spacing(6)] sm:[--gutter:--spacing(8)]">
+        <TableHead>
+          <TableRow>
+            <TableHeader>
+              <Checkbox aria-label="Select all campaigns" />
+            </TableHeader>
+            <TableHeader>Name</TableHeader>
+            <TableHeader>Status</TableHeader>
+            <TableHeader>Progress</TableHeader>
+            <TableHeader>Sent</TableHeader>
+            <TableHeader>Click</TableHeader>
+            <TableHeader>Replied</TableHeader>
+            <TableHeader>
+              <span className="sr-only">Actions</span>
+            </TableHeader>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {campaigns.map((c) => {
+            // placeholders for now
+            const progress = 0;
+            const sentCount = 0;
+            const clickCount = 0;
+            const repliedCount = 0;
+
+            return (
+              <TableRow
+                key={c.id}
+                style={{ cursor: "pointer" }}
+                onClick={() => {
+                  setSelectedCampaignId(c.id);
+                  setView("wizard");
+                  setWizardStep("leads");
+                }}
+              >
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Checkbox aria-label={`Select ${c.name}`} />
+                </TableCell>
+                <TableCell style={{ fontWeight: 500 }}>{c.name}</TableCell>
+                <TableCell>
+                  {c.status ? (
+                    <Badge color={getStatusColor(c.status)}>{c.status}</Badge>
+                  ) : (
+                    "-"
+                  )}
+                </TableCell>
+                <TableCell>{progress > 0 ? `${progress}%` : "-"}</TableCell>
+                <TableCell>{sentCount > 0 ? sentCount : "-"}</TableCell>
+                <TableCell>{clickCount > 0 ? clickCount : "-"}</TableCell>
+                <TableCell>{repliedCount > 0 ? repliedCount : "-"}</TableCell>
+
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Dropdown>
+                    <DropdownButton plain aria-label="More options">
+                      <EllipsisHorizontalIcon className="size-5" />
+                    </DropdownButton>
+                    <DropdownMenu>
+                      <DropdownItem onClick={(e) => {
+                        e.stopPropagation();
+                        renameCampaign(c);
+                      }}>
+                        <PencilIcon className="size-4" />
+                        <DropdownLabel>Rename</DropdownLabel>
+                      </DropdownItem>
+                      <DropdownItem onClick={(e) => {
+                        e.stopPropagation();
+                        deleteCampaign(c);
+                      }}>
+                        <TrashIcon className="size-4" />
+                        <DropdownLabel>Delete</DropdownLabel>
+                      </DropdownItem>
+                      <DropdownItem onClick={(e) => {
+                        e.stopPropagation();
+                        duplicateCampaign(c);
+                      }}>
+                        <DocumentDuplicateIcon className="size-4" />
+                        <DropdownLabel>Duplicate campaign</DropdownLabel>
+                      </DropdownItem>
+                      <DropdownItem onClick={(e) => {
+                        e.stopPropagation();
+                        downloadAnalyticsCSV(c);
+                      }}>
+                        <ArrowDownTrayIcon className="size-4" />
+                        <DropdownLabel>Download analytics CSV</DropdownLabel>
+                      </DropdownItem>
+                      <DropdownItem onClick={(e) => {
+                        e.stopPropagation();
+                        shareCampaign(c);
+                      }}>
+                        <ShareIcon className="size-4" />
+                        <DropdownLabel>Share Campaign</DropdownLabel>
+                      </DropdownItem>
+                    </DropdownMenu>
+                  </Dropdown>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+          {campaigns.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={8}>
+                <em>No campaigns found.</em>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+
+/app/protected/campaigns/campaigns-manager.jsx
+"use client";
+
+import React, { useEffect, useState } from "react";
+import Papa from "papaparse";
+import { createClient } from "@/utils/supabase/client";
+
+import CampaignsList from "./campaigns-list";
+import NewCampaign from "./new-campaign";
+import Wizard from "./wizard";
+
+export default function CampaignsManager() {
+  const supabase = createClient();
+  const [user, setUser] = useState(null);
+
+  // View states: "list" | "new" | "wizard"
+  const [view, setView] = useState("list");
+
+  // All user campaigns
+  const [campaigns, setCampaigns] = useState([]);
+
+  // For creating a new campaign
+  const [newCampaignName, setNewCampaignName] = useState("");
+
+  // Wizard state
+  const [wizardStep, setWizardStep] = useState("leads");
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [campaign, setCampaign] = useState(null);
+  const [leads, setLeads] = useState([]);
+  const [selectedLeadIds, setSelectedLeadIds] = useState([]);
+
+  // CSV states for leads
+  const [csvData, setCsvData] = useState([]);
+  const [csvHeaders, setCsvHeaders] = useState([]);
+  const [csvMapping, setCsvMapping] = useState({
+    phone: "",
+    first_name: "",
+    last_name: "",
+    company_name: "",
+  });
+  const [showCsvUploadForm, setShowCsvUploadForm] = useState(false);
+
+  // Combined schedule/sequence form state
+  const [scheduleForm, setScheduleForm] = useState({
+    name: "",
+    dailyLimit: 100,
+    startTime: "09:00",
+    endTime: "18:00",
+    daysOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    messageContent: "",
+  });
+
+  // ----------------------------
+  // 1) On mount, load user + campaigns
+  // ----------------------------
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setUser(null);
+        return;
+      }
+      setUser(user);
+
+      // load campaigns
+      const { data: c, error } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error loading campaigns:", error.message);
+        return;
+      }
+      setCampaigns(c || []);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ----------------------------
+  // 2) Whenever we go wizard mode, load that campaign details
+  // ----------------------------
+  useEffect(() => {
+    if (view !== "wizard" || !selectedCampaignId) return;
+    loadCampaignDetails(selectedCampaignId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedCampaignId]);
+
+  async function loadCampaignDetails(campaignId) {
+    // fetch the campaign
+    const { data: c } = await supabase
+      .from("campaigns")
+      .select("*")
+      .eq("id", campaignId)
+      .single();
+    setCampaign(c || null);
+
+    // fetch leads
+    const { data: leadRows } = await supabase
+      .from("campaign_leads")
+      .select("*")
+      .eq("campaign_id", campaignId);
+    setLeads(leadRows || []);
+
+    setSelectedLeadIds([]);
+
+    // Populate schedule form
+    if (c) {
+      setScheduleForm({
+        name: c.name || "",
+        dailyLimit: c.daily_limit || 100,
+        startTime: c.start_time ? convertUTCToLocal(c.start_time) : "09:00",
+        endTime: c.end_time ? convertUTCToLocal(c.end_time) : "18:00",
+        daysOfWeek:
+          c.days_of_week || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        messageContent: c.message_content || "",
+      });
+    }
+  }
+
+  // ----------------------------
+  // 3) Create new campaign
+  // ----------------------------
+  async function createCampaign() {
+    if (!newCampaignName.trim()) {
+      alert("Please enter a campaign name.");
+      return;
+    }
+    const { data, error } = await supabase
+      .from("campaigns")
+      .insert({
+        user_id: user.id,
+        name: newCampaignName.trim(),
+        status: "draft",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      alert("Error creating campaign: " + error.message);
+      return;
+    }
+    // Insert new campaign at top of the list
+    setCampaigns((prev) => [data, ...prev]);
+    // Switch to wizard view
+    setSelectedCampaignId(data.id);
+    setView("wizard");
+    setWizardStep("leads");
+    setNewCampaignName("");
+  }
+
+  // ----------------------------
+  // 4) Helpers to convert times
+  // ----------------------------
+  function convertLocalTimeToUTC(timeStr) {
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    const now = new Date();
+    now.setHours(hours, minutes, 0, 0);
+    const utcHours = now.getUTCHours();
+    const utcMinutes = now.getUTCMinutes();
+    return `${String(utcHours).padStart(2, "0")}:${String(utcMinutes).padStart(
+      2,
+      "0"
+    )}`;
+  }
+
+  function convertUTCToLocal(timeStr) {
+    const [utcHours, utcMinutes] = timeStr.split(":").map(Number);
+    const now = new Date();
+    const utcDate = new Date(
+      Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), utcHours, utcMinutes, 0)
+    );
+    const localHours = utcDate.getHours();
+    const localMinutes = utcDate.getMinutes();
+    return `${String(localHours).padStart(2, "0")}:${String(localMinutes).padStart(
+      2,
+      "0"
+    )}`;
+  }
+
+  // ----------------------------
+  // 5) Triple-dot actions
+  // ----------------------------
+  async function renameCampaign(c) {
+    const newName = window.prompt("Enter a new name for this campaign:", c.name);
+    if (!newName || !newName.trim()) {
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("campaigns")
+        .update({
+          name: newName.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", c.id);
+      if (error) {
+        alert("Error renaming campaign: " + error.message);
+        return;
+      }
+      alert(`Campaign renamed to: ${newName.trim()}`);
+      // refresh the list
+      const { data: refreshed, error: refreshErr } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (!refreshErr && refreshed) {
+        setCampaigns(refreshed);
+      }
+    } catch (err) {
+      alert("Unexpected error renaming campaign: " + err.message);
+    }
+  }
+
+  async function deleteCampaign(c) {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the campaign "${c.name}"?\nThis will also delete all associated leads and sends.`
+    );
+    if (!confirmed) return;
+
+    try {
+      // 1) delete leads and sends
+      await supabase.from("campaign_leads").delete().eq("campaign_id", c.id);
+      await supabase.from("campaign_sends").delete().eq("campaign_id", c.id);
+
+      // 2) delete the campaign
+      const { error } = await supabase.from("campaigns").delete().eq("id", c.id);
+      if (error) {
+        alert("Error deleting campaign: " + error.message);
+        return;
+      }
+      alert(`Deleted campaign: ${c.name}`);
+
+      // 3) refresh
+      const { data: refreshed, error: refreshErr } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (!refreshErr && refreshed) {
+        setCampaigns(refreshed);
+      }
+    } catch (err) {
+      alert("Unexpected error deleting campaign: " + err.message);
+    }
+  }
+
+  async function duplicateCampaign(original) {
+    const confirmed = window.confirm(
+      `Duplicate the campaign "${original.name}" along with its leads?`
+    );
+    if (!confirmed) return;
+    try {
+      const newCampaignName = `${original.name} (copy)`;
+      const insertData = {
+        user_id: original.user_id,
+        name: newCampaignName,
+        status: "draft",
+        daily_limit: original.daily_limit,
+        start_time: original.start_time,
+        end_time: original.end_time,
+        days_of_week: original.days_of_week,
+        message_content: original.message_content,
+      };
+      const { data: newCamp, error: campErr } = await supabase
+        .from("campaigns")
+        .insert(insertData)
+        .select()
+        .single();
+      if (campErr) {
+        alert("Error duplicating campaign: " + campErr.message);
+        return;
+      }
+      // leads copy
+      const { data: origLeads, error: leadErr } = await supabase
+        .from("campaign_leads")
+        .select("*")
+        .eq("campaign_id", original.id);
+      if (leadErr) {
+        alert("Error reading leads: " + leadErr.message);
+        return;
+      }
+      if (origLeads && origLeads.length > 0) {
+        const leadsToInsert = origLeads.map((l) => ({
+          campaign_id: newCamp.id,
+          company_name: l.company_name,
+          created_at: new Date().toISOString(),
+          first_name: l.first_name,
+          last_name: l.last_name,
+          personalization: l.personalization,
+          phone: l.phone,
+          stop_sending: l.stop_sending,
+        }));
+        const { error: insLeadsErr } = await supabase
+          .from("campaign_leads")
+          .insert(leadsToInsert);
+        if (insLeadsErr) {
+          alert("Error inserting duplicated leads: " + insLeadsErr.message);
+          return;
+        }
+      }
+      alert(`Campaign duplicated as "${newCampaignName}".`);
+      // refresh
+      const { data: refreshed, error: refreshErr } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("user_id", original.user_id)
+        .order("created_at", { ascending: false });
+      if (!refreshErr && refreshed) {
+        setCampaigns(refreshed);
+      }
+    } catch (err) {
+      alert("Unexpected error duplicating campaign: " + err.message);
+    }
+  }
+
+  async function downloadAnalyticsCSV(c) {
+    try {
+      const { data: sends, error } = await supabase
+        .from("campaign_sends")
+        .select("*")
+        .eq("campaign_id", c.id);
+      if (error) {
+        alert("Error fetching sends: " + error.message);
+        return;
+      }
+      if (!sends || sends.length === 0) {
+        alert("No sends found for this campaign.");
+        return;
+      }
+      const csv = Papa.unparse(sends, {
+        quotes: false,
+        delimiter: ",",
+        newline: "\r\n",
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `campaign_${c.id}_analytics.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert("Error exporting CSV: " + err.message);
+    }
+  }
+
+  function shareCampaign(c) {
+    alert(
+      `Share link for campaign "${c.name}":\n` +
+        `https://yourapp.example.com/public-campaign?c=${c.id}`
+    );
+  }
+
+  // ----------------------------
+  // 6) If no user, bail out
+  // ----------------------------
+  if (!user) {
+    return <div>No user session found.</div>;
+  }
+
+  // ----------------------------
+  // 7) Decide which “view” to render
+  // ----------------------------
+  switch (view) {
+    case "list":
+      return (
+        <CampaignsList
+          campaigns={campaigns}
+          setView={setView}
+          renameCampaign={renameCampaign}
+          deleteCampaign={deleteCampaign}
+          duplicateCampaign={duplicateCampaign}
+          downloadAnalyticsCSV={downloadAnalyticsCSV}
+          shareCampaign={shareCampaign}
+          setSelectedCampaignId={setSelectedCampaignId}
+          setWizardStep={setWizardStep}
+        />
+      );
+
+    case "new":
+      return (
+        <NewCampaign
+          newCampaignName={newCampaignName}
+          setNewCampaignName={setNewCampaignName}
+          createCampaign={createCampaign}
+          setView={setView}
+        />
+      );
+
+    case "wizard":
+      return (
+        <Wizard
+          wizardStep={wizardStep}
+          setWizardStep={setWizardStep}
+          campaign={campaign}
+          selectedCampaignId={selectedCampaignId}
+          leads={leads}
+          selectedLeadIds={selectedLeadIds}
+          setSelectedLeadIds={setSelectedLeadIds}
+          showCsvUploadForm={showCsvUploadForm}
+          setShowCsvUploadForm={setShowCsvUploadForm}
+          csvData={csvData}
+          setCsvData={setCsvData}
+          csvHeaders={csvHeaders}
+          setCsvHeaders={setCsvHeaders}
+          csvMapping={csvMapping}
+          setCsvMapping={setCsvMapping}
+          supabase={supabase}
+          loadCampaignDetails={loadCampaignDetails}
+          scheduleForm={scheduleForm}
+          setScheduleForm={setScheduleForm}
+        />
+      );
+
+    default:
+      return null;
+  }
+}
+
+
+/app/protected/campaigns/leads.jsx
+"use client";
+
+import React from "react";
+import Papa from "papaparse";
+import { Button } from "@/components/button";
+import {
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableHeader,
+  TableCell,
+} from "@/components/table";
+import { Checkbox } from "@/components/checkbox";
+import { Heading } from "@/components/heading";
+import {
+  Fieldset,
+  FieldGroup,
+  Field,
+  Label,
+} from "@/components/fieldset";
+import { Input } from "@/components/input";
+
+/**
+ * Props:
+ *  - leads
+ *  - selectedLeadIds, setSelectedLeadIds
+ *  - showCsvUploadForm, setShowCsvUploadForm
+ *  - csvData, setCsvData
+ *  - csvHeaders, setCsvHeaders
+ *  - csvMapping, setCsvMapping
+ *  - supabase
+ *  - selectedCampaignId
+ *  - loadCampaignDetails
+ */
+export default function LeadsStep({
+  leads,
+  selectedLeadIds,
+  setSelectedLeadIds,
+  showCsvUploadForm,
+  setShowCsvUploadForm,
+  csvData,
+  setCsvData,
+  csvHeaders,
+  setCsvHeaders,
+  csvMapping,
+  setCsvMapping,
+  supabase,
+  selectedCampaignId,
+  loadCampaignDetails,
+}) {
+  // Toggle a single lead's checkbox
+  function toggleLeadSelection(leadId) {
+    setSelectedLeadIds((prev) => {
+      if (prev.includes(leadId)) {
+        return prev.filter((id) => id !== leadId);
+      } else {
+        return [...prev, leadId];
+      }
+    });
+  }
+
+  async function handleCsvFile(file) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+      });
+      const nonFieldMismatchErrors = parsed.errors.filter(
+        (err) => err.code !== "TooFewFields"
+      );
+      if (nonFieldMismatchErrors.length > 0) {
+        console.error(nonFieldMismatchErrors);
+        alert("Error parsing CSV.");
+        return;
+      }
+      const rows = parsed.data;
+      if (!rows || rows.length === 0) {
+        alert("No rows found in CSV.");
+        return;
+      }
+      const headers = parsed.meta.fields || [];
+      setCsvHeaders(headers);
+      setCsvData(rows);
+
+      // Attempt auto-detection
+      let detectedMapping = {
+        phone: "",
+        first_name: "",
+        last_name: "",
+        company_name: "",
+      };
+      const phoneHeaderCandidates = ["phone", "phone number", "phone numbers"];
+      const firstNameCandidates = ["first name", "firstname", "first"];
+      const lastNameCandidates = ["last name", "lastname", "last"];
+      const companyCandidates = ["company", "company name", "business"];
+
+      detectedMapping.phone =
+        headers.find((h) => phoneHeaderCandidates.includes(h.toLowerCase())) || "";
+      detectedMapping.first_name =
+        headers.find((h) => firstNameCandidates.includes(h.toLowerCase())) || "";
+      detectedMapping.last_name =
+        headers.find((h) => lastNameCandidates.includes(h.toLowerCase())) || "";
+      detectedMapping.company_name =
+        headers.find((h) => companyCandidates.includes(h.toLowerCase())) || "";
+
+      setCsvMapping(detectedMapping);
+
+      alert("CSV loaded. Please adjust the mapping if needed.");
+    } catch (err) {
+      console.error(err);
+      alert("Error reading CSV file: " + err.message);
+    }
+  }
+
+  function validatePhone(phone) {
+    return /^[0-9]+$/.test(phone);
+  }
+
+  async function importLeads() {
+    if (!selectedCampaignId) {
+      alert("No campaign selected.");
+      return;
+    }
+    if (!csvData || csvData.length === 0) {
+      alert("No CSV data loaded.");
+      return;
+    }
+    if (!csvMapping.phone) {
+      alert("Please select the phone column in the mapping.");
+      return;
+    }
+    const leadsToInsert = [];
+    let invalidCount = 0;
+    for (const row of csvData) {
+      const phoneValue = row[csvMapping.phone]?.toString().trim();
+      if (!phoneValue || !validatePhone(phoneValue)) {
+        invalidCount++;
+        continue;
+      }
+      const firstName = csvMapping.first_name
+        ? row[csvMapping.first_name]?.toString().trim() || ""
+        : "";
+      const lastName = csvMapping.last_name
+        ? row[csvMapping.last_name]?.toString().trim() || ""
+        : "";
+      const companyName = csvMapping.company_name
+        ? row[csvMapping.company_name]?.toString().trim() || ""
+        : "";
+
+      const personal = { ...row };
+      if (csvMapping.phone) delete personal[csvMapping.phone];
+      if (csvMapping.first_name) delete personal[csvMapping.first_name];
+      if (csvMapping.last_name) delete personal[csvMapping.last_name];
+      if (csvMapping.company_name) delete personal[csvMapping.company_name];
+
+      leadsToInsert.push({
+        campaign_id: selectedCampaignId,
+        phone: phoneValue,
+        first_name: firstName,
+        last_name: lastName,
+        company_name: companyName,
+        personalization: personal,
+        created_at: new Date().toISOString(),
+        stop_sending: false,
+      });
+    }
+    if (leadsToInsert.length === 0) {
+      alert(`No valid leads found. ${invalidCount} invalid phone numbers.`);
+      return;
+    }
+    const { error } = await supabase.from("campaign_leads").insert(leadsToInsert);
+    if (error) {
+      alert("Error inserting leads: " + error.message);
+      return;
+    }
+    await loadCampaignDetails(selectedCampaignId);
+
+    // Clear everything
+    setCsvData([]);
+    setCsvHeaders([]);
+    setCsvMapping({
+      phone: "",
+      first_name: "",
+      last_name: "",
+      company_name: "",
+    });
+    setShowCsvUploadForm(false);
+
+    let message = "Imported leads successfully!";
+    if (invalidCount > 0) {
+      message += ` Skipped ${invalidCount} row(s) due to invalid phone numbers.`;
+    }
+    alert(message);
+  }
+
+  return (
+    <div style={{ marginTop: "2rem" }}>
+      <p>{leads.length} leads in this campaign.</p>
+
+      {showCsvUploadForm && (
+        <div
+          style={{
+            marginTop: "2rem",
+            border: "1px solid #ccc",
+            padding: "1rem",
+            borderRadius: "4px",
+          }}
+        >
+          <Heading level={4}>Upload CSV Leads</Heading>
+          <Fieldset style={{ marginTop: "1rem" }}>
+            <FieldGroup>
+              <Field>
+                <Label>CSV File</Label>
+                <Input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleCsvFile(e.target.files[0]);
+                    }
+                  }}
+                />
+              </Field>
+            </FieldGroup>
+          </Fieldset>
+
+          {csvHeaders.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <Heading level={5}>Map CSV columns to database fields:</Heading>
+              <Fieldset style={{ marginTop: "0.5rem" }}>
+                <FieldGroup>
+                  <Field>
+                    <Label>Phone Number</Label>
+                    <select
+                      value={csvMapping.phone}
+                      onChange={(e) =>
+                        setCsvMapping({ ...csvMapping, phone: e.target.value })
+                      }
+                    >
+                      <option value="">--Select Column--</option>
+                      {csvHeaders.map((header) => (
+                        <option key={header} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field>
+                    <Label>First Name</Label>
+                    <select
+                      value={csvMapping.first_name}
+                      onChange={(e) =>
+                        setCsvMapping({ ...csvMapping, first_name: e.target.value })
+                      }
+                    >
+                      <option value="">--Select Column--</option>
+                      {csvHeaders.map((header) => (
+                        <option key={header} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field>
+                    <Label>Last Name</Label>
+                    <select
+                      value={csvMapping.last_name}
+                      onChange={(e) =>
+                        setCsvMapping({ ...csvMapping, last_name: e.target.value })
+                      }
+                    >
+                      <option value="">--Select Column--</option>
+                      {csvHeaders.map((header) => (
+                        <option key={header} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field>
+                    <Label>Company Name</Label>
+                    <select
+                      value={csvMapping.company_name}
+                      onChange={(e) =>
+                        setCsvMapping({
+                          ...csvMapping,
+                          company_name: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">--Select Column--</option>
+                      {csvHeaders.map((header) => (
+                        <option key={header} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </FieldGroup>
+              </Fieldset>
+            </div>
+          )}
+
+          <div style={{ marginTop: "1rem" }}>
+            <Button color="blue" onClick={importLeads}>
+              Import Leads
+            </Button>
+            <Button
+              plain
+              onClick={() => setShowCsvUploadForm(false)}
+              style={{ marginLeft: "1rem" }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {leads.length > 0 ? (
+        <div style={{ marginTop: "2rem" }}>
+          <Table
+            bleed
+            striped
+            className="[--gutter:--spacing(6)] sm:[--gutter:--spacing(8)] mt-2"
+          >
+            <TableHead>
+              <TableRow>
+                <TableHeader>Select</TableHeader>
+                <TableHeader>Phone</TableHeader>
+                <TableHeader>First Name</TableHeader>
+                <TableHeader>Last Name</TableHeader>
+                <TableHeader>Company Name</TableHeader>
+                <TableHeader>Created At</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {leads.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell>
+                    <Checkbox
+                      aria-label={`Select lead ${l.id}`}
+                      checked={selectedLeadIds.includes(l.id)}
+                      onChange={() => toggleLeadSelection(l.id)}
+                    />
+                  </TableCell>
+                  <TableCell>{l.phone}</TableCell>
+                  <TableCell>{l.first_name || "-"}</TableCell>
+                  <TableCell>{l.last_name || "-"}</TableCell>
+                  <TableCell>{l.company_name || "-"}</TableCell>
+                  <TableCell>{l.created_at}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-gray-600">
+          No leads yet. Click the plus icon above to add leads.
+        </p>
+      )}
+    </div>
+  );
+}
+
+
+/app/protected/campaigns/new-campaign.jsx
+"use client";
+
+import React from "react";
+import { Heading } from "@/components/heading";
+import { Text } from "@/components/text"; // <-- Make sure this exists in your project
+import { Button } from "@/components/button";
+import { Fieldset, Legend, FieldGroup, Field, Label } from "@/components/fieldset";
+import { Input } from "@/components/input";
+
+export default function NewCampaign({
+  newCampaignName,
+  setNewCampaignName,
+  createCampaign,
+  setView,
+}) {
+  return (
+    <div style={{ padding: "1rem" }}>
+      <Heading>New Campaign</Heading>
+      <Text className="mt-2">
+        Name your campaign, then proceed to import leads, schedule your SMS, etc.
+      </Text>
+
+      <Fieldset style={{ marginTop: "1rem", maxWidth: "500px" }}>
+        <Legend>Campaign Details</Legend>
+        <FieldGroup>
+          <Field>
+            <Label>Campaign Name</Label>
+            <Input
+              name="campaignName"
+              value={newCampaignName}
+              onChange={(e) => setNewCampaignName(e.target.value)}
+            />
+          </Field>
+        </FieldGroup>
+      </Fieldset>
+
+      <div style={{ marginTop: "1.5rem" }}>
+        <Button color="blue" onClick={createCampaign}>
+          Create
+        </Button>
+        <Button plain onClick={() => setView("list")} style={{ marginLeft: 8 }}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+
+/app/protected/campaigns/options.jsx
+"use client";
+
+import React from "react";
+import { Button } from "@/components/button";
+import { Subheading } from "@/components/heading";
+
+export default function OptionsStep({ campaign, launchCampaign }) {
+  return (
+    <div style={{ marginTop: "2rem" }}>
+      <Subheading>Options</Subheading>
+      <p className="mt-2">Current status: {campaign.status}</p>
+      <div style={{ marginTop: "1rem" }}>
+        <Button
+          color="green"
+          disabled={campaign.status === "active"}
+          onClick={launchCampaign}
+        >
+          Launch Campaign
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+
+/app/protected/campaigns/page.jsx
+"use client";
+
+import CampaignsManager from "./campaigns-manager";
+
+export default function Page() {
+  return <CampaignsManager />;
+}
+
+
+/app/protected/campaigns/schedule.jsx
+"use client";
+
+import React from "react";
+import { Button } from "@/components/button";
+import {
+  Fieldset,
+  Legend,
+  FieldGroup,
+  Field,
+  Label,
+  Description,
+} from "@/components/fieldset";
+import { Input } from "@/components/input";
+import { Checkbox } from "@/components/checkbox";
+
+export default function ScheduleStep({
+  scheduleForm,
+  setScheduleForm,
+  saveSchedule,
+  toggleDay,
+}) {
+  const allDays = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+
+  return (
+    <div style={{ marginTop: "2rem" }}>
+      <h2 className="text-lg font-semibold">Schedule</h2>
+      <Fieldset style={{ marginTop: "1.5rem", maxWidth: 500 }}>
+        <Legend>Campaign Settings</Legend>
+        <FieldGroup>
+          <Field>
+            <Label>Campaign Name</Label>
+            <Input
+              name="scheduleName"
+              value={scheduleForm.name}
+              onChange={(e) =>
+                setScheduleForm({ ...scheduleForm, name: e.target.value })
+              }
+            />
+          </Field>
+          <Field>
+            <Label>Daily Limit</Label>
+            <Input
+              type="number"
+              value={scheduleForm.dailyLimit}
+              onChange={(e) =>
+                setScheduleForm({ ...scheduleForm, dailyLimit: Number(e.target.value) })
+              }
+            />
+            <Description>Max texts per day (depends on backends).</Description>
+          </Field>
+          <Field>
+            <Label>Start Time</Label>
+            <Input
+              type="time"
+              value={scheduleForm.startTime}
+              onChange={(e) =>
+                setScheduleForm({ ...scheduleForm, startTime: e.target.value })
+              }
+            />
+          </Field>
+          <Field>
+            <Label>End Time</Label>
+            <Input
+              type="time"
+              value={scheduleForm.endTime}
+              onChange={(e) =>
+                setScheduleForm({ ...scheduleForm, endTime: e.target.value })
+              }
+            />
+          </Field>
+          <Field>
+            <Label>Days of Week</Label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+              {allDays.map((d) => {
+                const checked = scheduleForm.daysOfWeek.includes(d);
+                return (
+                  <label key={d} style={{ display: "flex", alignItems: "center" }}>
+                    <Checkbox checked={checked} onChange={() => toggleDay(d)} />
+                    <span style={{ marginLeft: 4 }}>{d}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </Field>
+        </FieldGroup>
+      </Fieldset>
+      <div style={{ marginTop: "1.5rem" }}>
+        <Button color="blue" onClick={saveSchedule}>
+          Save Schedule
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+
+/app/protected/campaigns/sequence.jsx
+"use client";
+
+import React, { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/button";
+import {
+  Fieldset,
+  Legend,
+  FieldGroup,
+  Field,
+  Label,
+  Description,
+} from "@/components/fieldset";
+import { Textarea } from "@/components/textarea";
+
+/**
+ * SequenceStep component:
+ *  - Tells the user about dynamic variables like {firstName}, {lastName}, {companyName}.
+ *  - Displays a Textarea for "messageContent".
+ *  - Provides an autocomplete dropdown when the user types "{".
+ */
+export default function SequenceStep({
+  scheduleForm,
+  setScheduleForm,
+  saveSequence,
+}) {
+  // Which variables you want to allow:
+  const dynamicVariables = [
+    "{firstName}",
+    "{lastName}",
+    "{companyName}",
+  ];
+
+  // State to show/hide the autocomplete dropdown
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+
+  // If you want to track the X/Y position in a more advanced way, you could do so here.
+  // For simplicity, we show the suggestions below the textarea always.
+  const textAreaRef = useRef(null);
+
+  /**
+   * If the user typed "{" as the last character, show the dropdown.
+   * Otherwise, hide it.
+   */
+  function handleTextareaChange(e) {
+    const { value, selectionStart } = e.target;
+    setScheduleForm({ ...scheduleForm, messageContent: value });
+
+    // If the last typed character is '{', show suggestions
+    // We'll also check that it's not a repeated {{ or something,
+    // but you can remove that check if you want.
+    if (
+      selectionStart > 0 &&
+      value[selectionStart - 1] === "{" &&
+      (selectionStart === 1 || value[selectionStart - 2] !== "{")
+    ) {
+      setShowAutocomplete(true);
+    } else {
+      // Hide if user deletes or types something else
+      setShowAutocomplete(false);
+    }
+  }
+
+  /**
+   * Inserts the chosen variable in place of the last typed '{'.
+   */
+  function insertVariable(variable) {
+    const textarea = textAreaRef.current;
+    if (!textarea) return;
+
+    const { value, selectionStart, selectionEnd } = textarea;
+    // We find the position of the '{' we just typed. That is (selectionStart - 1).
+    const insertPos = selectionStart - 1;
+    if (insertPos < 0) return;
+
+    // Replace that '{' with the entire variable, e.g. {firstName}
+    const newValue =
+      value.substring(0, insertPos) + variable + value.substring(selectionEnd);
+
+    // Compute new cursor position => insertPos + length of inserted variable
+    const newCursorPos = insertPos + variable.length;
+
+    // Update the form and hide dropdown
+    setScheduleForm({ ...scheduleForm, messageContent: newValue });
+    setShowAutocomplete(false);
+
+    // Re-focus and set cursor
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    });
+  }
+
+  return (
+    <div style={{ marginTop: "2rem" }}>
+      <h2 className="text-lg font-semibold">Sequence</h2>
+
+      {/* Explain dynamic variables to the user */}
+      <p className="text-sm mt-2 mb-4 text-foreground/80">
+        Use dynamic variables like <code>{"{firstName}"}</code>,{" "}
+        <code>{"{lastName}"}</code>, and <code>{"{companyName}"}</code> in your
+        message. For example:{" "}
+        <em>
+          "Hello {"{firstName}"} from {"{companyName}"}!"
+        </em>
+        <br />
+        As soon as you type a lone <strong>{"{"}</strong> character, you'll see
+        suggestions.
+      </p>
+
+      <Fieldset style={{ marginTop: "1.5rem", maxWidth: 500 }}>
+        <Legend>Message Settings</Legend>
+        <FieldGroup>
+          <Field>
+            <Label>Message Content</Label>
+            <Textarea
+              ref={textAreaRef}
+              rows={3}
+              value={scheduleForm.messageContent}
+              onChange={handleTextareaChange}
+            />
+            <Description>
+              This is the SMS message sent to each lead.
+            </Description>
+          </Field>
+        </FieldGroup>
+      </Fieldset>
+
+      {/* Autocomplete suggestions (only shown if showAutocomplete = true) */}
+      {showAutocomplete && (
+        <div
+          style={{
+            marginTop: 8,
+            border: "1px solid #ccc",
+            background: "white",
+            borderRadius: 4,
+            padding: "4px 8px",
+            maxWidth: 250,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+          }}
+        >
+          <p className="text-xs mb-2 text-foreground/60">
+            Insert a dynamic variable:
+          </p>
+          {dynamicVariables.map((variable) => (
+            <div
+              key={variable}
+              onClick={() => insertVariable(variable)}
+              style={{
+                padding: "4px 0",
+                cursor: "pointer",
+                borderBottom: "1px solid #eee",
+              }}
+            >
+              <code>{variable}</code>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: "1.5rem" }}>
+        <Button color="blue" onClick={saveSequence}>
+          Save Sequence
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+
+/app/protected/campaigns/wizard.jsx
+"use client";
+
+import React from "react";
+import { Heading } from "@/components/heading";
+import {
+  Navbar,
+  NavbarSection,
+  NavbarSpacer,
+  NavbarItem,
+} from "@/components/navbar";
+import { TrashIcon, PlusIcon } from "@heroicons/react/16/solid";
+
+import LeadsStep from "./leads";
+import SequenceStep from "./sequence";
+import ScheduleStep from "./schedule";
+import OptionsStep from "./options";
+
+/**
+ * The Wizard is only shown if we have a `campaign` selected.
+ * It receives from the parent:
+ *   - wizardStep, setWizardStep
+ *   - campaign, selectedCampaignId
+ *   - leads, selectedLeadIds, etc.
+ *   - plus the scheduleForm and supabase references
+ */
+export default function Wizard({
+  wizardStep,
+  setWizardStep,
+  campaign,
+  selectedCampaignId,
+  leads,
+  selectedLeadIds,
+  setSelectedLeadIds,
+  showCsvUploadForm,
+  setShowCsvUploadForm,
+  csvData,
+  setCsvData,
+  csvHeaders,
+  setCsvHeaders,
+  csvMapping,
+  setCsvMapping,
+  supabase,
+  loadCampaignDetails,
+  scheduleForm,
+  setScheduleForm,
+}) {
+  // --------------
+  // Wizard Action: Delete selected leads
+  // --------------
+  async function handleDeleteSelectedLeads() {
+    if (selectedLeadIds.length === 0) {
+      alert("No leads selected.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedLeadIds.length} lead(s)?`
+    );
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("campaign_leads")
+      .delete()
+      .in("id", selectedLeadIds);
+    if (error) {
+      alert("Error deleting selected leads: " + error.message);
+      return;
+    }
+    await loadCampaignDetails(selectedCampaignId);
+    alert(`${selectedLeadIds.length} lead(s) deleted.`);
+  }
+
+  // --------------
+  // Toggle day
+  // --------------
+  function toggleDay(d) {
+    setScheduleForm((prev) => {
+      const days = new Set(prev.daysOfWeek);
+      if (days.has(d)) {
+        days.delete(d);
+      } else {
+        days.add(d);
+      }
+      return { ...prev, daysOfWeek: Array.from(days) };
+    });
+  }
+
+  // --------------
+  // Save schedule
+  // --------------
+  async function saveSchedule() {
+    // daily limit check
+    const {
+      data: backends,
+      error: beError,
+    } = await supabase.from("backends").select("id").eq("user_id", campaign.user_id);
+    if (beError) {
+      alert("Error checking backends: " + beError.message);
+      return;
+    }
+    const maxAllowed = (backends?.length || 0) * 100;
+    const safeDailyLimit = Math.min(scheduleForm.dailyLimit, maxAllowed);
+
+    const updates = {
+      name: scheduleForm.name,
+      daily_limit: safeDailyLimit,
+      start_time: convertLocalTimeToUTC(scheduleForm.startTime),
+      end_time: convertLocalTimeToUTC(scheduleForm.endTime),
+      days_of_week: scheduleForm.daysOfWeek,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from("campaigns")
+      .update(updates)
+      .eq("id", selectedCampaignId);
+    if (error) {
+      alert("Error updating schedule: " + error.message);
+      return;
+    }
+    alert("Schedule saved!");
+    await loadCampaignDetails(selectedCampaignId);
+  }
+
+  // --------------
+  // Save sequence
+  // --------------
+  async function saveSequence() {
+    const { error } = await supabase
+      .from("campaigns")
+      .update({
+        message_content: scheduleForm.messageContent,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedCampaignId);
+    if (error) {
+      alert("Error updating sequence: " + error.message);
+      return;
+    }
+    alert("Sequence saved!");
+    await loadCampaignDetails(selectedCampaignId);
+  }
+
+  // --------------
+  // Launch campaign
+  // --------------
+  async function launchCampaign() {
+    if (!campaign) return;
+    const { error } = await supabase
+      .from("campaigns")
+      .update({
+        status: "active",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedCampaignId);
+    if (error) {
+      alert("Error launching campaign: " + error.message);
+      return;
+    }
+    await loadCampaignDetails(selectedCampaignId);
+    alert("Campaign launched!");
+  }
+
+  function convertLocalTimeToUTC(timeStr) {
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    const now = new Date();
+    now.setHours(hours, minutes, 0, 0);
+    const utcHours = now.getUTCHours();
+    const utcMinutes = now.getUTCMinutes();
+    return `${String(utcHours).padStart(2, "0")}:${String(utcMinutes).padStart(
+      2,
+      "0"
+    )}`;
+  }
+
+  if (!campaign) {
+    return (
+      <div style={{ padding: "1rem" }}>
+        <h2>No campaign selected.</h2>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "1rem" }}>
+      <Heading level={2}>
+        Campaign: {campaign.name} (Status: {campaign.status})
+      </Heading>
+
+      {/* Navbar for wizard steps */}
+      <Navbar className="mt-6">
+        <NavbarSection>
+          <NavbarItem current={wizardStep === "leads"} onClick={() => setWizardStep("leads")}>
+            Leads
+          </NavbarItem>
+          <NavbarItem
+            current={wizardStep === "sequence"}
+            onClick={() => setWizardStep("sequence")}
+          >
+            Sequence
+          </NavbarItem>
+          <NavbarItem
+            current={wizardStep === "schedule"}
+            onClick={() => setWizardStep("schedule")}
+          >
+            Schedule
+          </NavbarItem>
+          <NavbarItem
+            current={wizardStep === "options"}
+            onClick={() => setWizardStep("options")}
+          >
+            Options
+          </NavbarItem>
+        </NavbarSection>
+        <NavbarSpacer />
+        <NavbarSection>
+          {wizardStep === "leads" && (
+            <>
+              <NavbarItem
+                onClick={handleDeleteSelectedLeads}
+                aria-label="Delete selected leads"
+              >
+                <TrashIcon className="size-4" />
+              </NavbarItem>
+              <NavbarItem
+                onClick={() => setShowCsvUploadForm(true)}
+                aria-label="Add leads"
+              >
+                <PlusIcon className="size-4" />
+              </NavbarItem>
+            </>
+          )}
+        </NavbarSection>
+      </Navbar>
+
+      {/* The actual wizard content */}
+      {wizardStep === "leads" && (
+        <LeadsStep
+          leads={leads}
+          selectedLeadIds={selectedLeadIds}
+          setSelectedLeadIds={setSelectedLeadIds}
+          showCsvUploadForm={showCsvUploadForm}
+          setShowCsvUploadForm={setShowCsvUploadForm}
+          csvData={csvData}
+          setCsvData={setCsvData}
+          csvHeaders={csvHeaders}
+          setCsvHeaders={setCsvHeaders}
+          csvMapping={csvMapping}
+          setCsvMapping={setCsvMapping}
+          supabase={supabase}
+          selectedCampaignId={selectedCampaignId}
+          loadCampaignDetails={loadCampaignDetails}
+        />
+      )}
+      {wizardStep === "sequence" && (
+        <SequenceStep
+          scheduleForm={scheduleForm}
+          setScheduleForm={setScheduleForm}
+          saveSequence={saveSequence}
+        />
+      )}
+      {wizardStep === "schedule" && (
+        <ScheduleStep
+          scheduleForm={scheduleForm}
+          setScheduleForm={setScheduleForm}
+          saveSchedule={saveSchedule}
+          toggleDay={toggleDay}
+        />
+      )}
+      {wizardStep === "options" && (
+        <OptionsStep campaign={campaign} launchCampaign={launchCampaign} />
+      )}
+    </div>
+  );
+}
+
+
+/app/protected/layout.jsx
+import React from "react";
+import { createClient } from "@/utils/supabase/server";
+import { redirect } from "next/navigation";
+import { StackedLayout } from "@/components/stacked-layout";
+import {
+  Dropdown,
+  DropdownButton,
+  DropdownDivider,
+  DropdownItem,
+  DropdownLabel,
+  DropdownMenu,
+} from "@/components/dropdown";
+import {
+  Navbar,
+  NavbarDivider,
+  NavbarItem,
+  NavbarLabel,
+  NavbarSection,
+  NavbarSpacer,
+} from "@/components/navbar";
+import {
+  Sidebar,
+  SidebarBody,
+  SidebarHeader,
+  SidebarItem,
+  SidebarLabel,
+  SidebarSection,
+} from "@/components/sidebar";
+import {
+  ArrowRightStartOnRectangleIcon,
+  Cog8ToothIcon,
+  LightBulbIcon,
+  ShieldCheckIcon,
+  UserIcon,
+} from "@heroicons/react/16/solid";
+import "@/app/globals.css";
+
+export default async function ProtectedLayout({ children }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/sign-in");
+  }
+
+  return (
+    <StackedLayout
+      navbar={
+        <Navbar>
+          {/* Left logo + text */}
+          <NavbarItem>
+            <img src="/koldsmslogo.png" alt="koldsms logo" className="h-6" />
+            <NavbarLabel>
+              <img src="/koldsmslogotext.png" alt="koldsms" className="h-4" />
+            </NavbarLabel>
+          </NavbarItem>
+          <NavbarDivider className="max-lg:hidden" />
+
+          {/* Navigation links */}
+          <NavbarSection className="max-lg:hidden">
+            <NavbarItem href="/protected/unibox">Inbox</NavbarItem>
+            <NavbarItem href="/protected/campaigns">Campaigns</NavbarItem>
+          </NavbarSection>
+
+          <NavbarSpacer />
+
+          {/* User dropdown */}
+          <NavbarSection>
+            <Dropdown>
+              <DropdownButton as={NavbarItem}>
+                <img src="/chud.png" alt="profile" className="h-8 rounded-4xl" />
+              </DropdownButton>
+              <DropdownMenu className="min-w-64" anchor="bottom end">
+                <DropdownItem href="/my-profile">
+                  <UserIcon />
+                  <DropdownLabel>My profile</DropdownLabel>
+                </DropdownItem>
+                <DropdownItem href="/settings">
+                  <Cog8ToothIcon />
+                  <DropdownLabel>Settings</DropdownLabel>
+                </DropdownItem>
+                <DropdownDivider />
+                <DropdownItem href="/privacy-policy">
+                  <ShieldCheckIcon />
+                  <DropdownLabel>Privacy policy</DropdownLabel>
+                </DropdownItem>
+                <DropdownItem href="/share-feedback">
+                  <LightBulbIcon />
+                  <DropdownLabel>Share feedback</DropdownLabel>
+                </DropdownItem>
+                <DropdownDivider />
+                <DropdownItem href="/logout">
+                  <ArrowRightStartOnRectangleIcon />
+                  <DropdownLabel>Sign out</DropdownLabel>
+                </DropdownItem>
+              </DropdownMenu>
+            </Dropdown>
+          </NavbarSection>
+        </Navbar>
+      }
+      sidebar={
+        <Sidebar>
+          <SidebarHeader>
+            <SidebarItem className="lg:mb-2.5">
+              <img src="/koldsmslogo.png" alt="koldsms logo" className="h-8" />
+              <SidebarLabel>
+                <img src="/koldsmslogotext.png" alt="koldsms" className="h-4" />
+              </SidebarLabel>
+            </SidebarItem>
+          </SidebarHeader>
+          <SidebarBody>
+            <SidebarSection>
+              <SidebarItem href="/protected/campaigns">Campaigns</SidebarItem>
+              <SidebarItem href="/protected/unibox">Inbox</SidebarItem>
+            </SidebarSection>
+          </SidebarBody>
+        </Sidebar>
+      }
+    >
+      {/* Remove any padding or margin from the primary content container */}
+      <div className="m-0">{children}</div>
+    </StackedLayout>
+  );
+}
+
+
+/app/protected/page.jsx
+import { redirect } from "next/navigation";
+
+export default function ProtectedPage() {
+  redirect("/protected/unibox");
+  return null;
+}
+
+
+/app/protected/reset-password/page.tsx
+import { resetPasswordAction } from "@/app/actions";
+import { FormMessage, Message } from "@/components/form-message";
+import { SubmitButton } from "@/components/submit-button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+export default async function ResetPassword(props: {
+  searchParams: Promise<Message>;
+}) {
+  const searchParams = await props.searchParams;
+  return (
+    <form className="flex flex-col w-full max-w-md p-4 gap-2 [&>input]:mb-4">
+      <h1 className="text-2xl font-medium">Reset password</h1>
+      <p className="text-sm text-foreground/60">
+        Please enter your new password below.
+      </p>
+      <Label htmlFor="password">New password</Label>
+      <Input
+        type="password"
+        name="password"
+        placeholder="New password"
+        required
+      />
+      <Label htmlFor="confirmPassword">Confirm password</Label>
+      <Input
+        type="password"
+        name="confirmPassword"
+        placeholder="Confirm password"
+        required
+      />
+      <SubmitButton formAction={resetPasswordAction}>
+        Reset password
+      </SubmitButton>
+      <FormMessage message={searchParams} />
+    </form>
+  );
+}
+
+
+/app/protected/unibox/page.jsx
+import { createClient } from "@/utils/supabase/server";
+import UniboxClient from "./unibox-client"; // We'll define a separate client component
+
+export default async function ProtectedPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return <div>No user session found!</div>;
+  }
+
+  const { data: backends, error: beError } = await supabase
+    .from("backends")
+    .select("id, base_url, created_at")
+    .eq("user_id", user.id); 
+
+  if (beError) {
+    return <div>Error loading backends: {beError.message}</div>;
+  }
+
+  const userBackends = backends || [];
+
+  return (
+    <section>
+      <UniboxClient userBackends={userBackends} />
+    </section>
+  );
+}
+
+
+/app/protected/unibox/unibox-client.jsx
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { Heading } from "@/components/heading";
+import { Text } from "@/components/text";
+import { Fieldset, FieldGroup, Field, Label } from "@/components/fieldset";
+import { Input } from "@/components/input";
+import { Textarea } from "@/components/textarea";
+import { Button } from "@/components/button";
+
+/**
+ * userBackends: Array of backend objects: { id, base_url, created_at, ... }
+ */
+export default function UniboxClient({ userBackends }) {
+  const [previews, setPreviews] = useState([]);
+  const [selectedPhone, setSelectedPhone] = useState("");
+  const [selectedBackendIndex, setSelectedBackendIndex] = useState("");
+  const [conversation, setConversation] = useState([]);
+  const [status, setStatus] = useState("");
+
+  const [newSelectedBackend, setNewSelectedBackend] = useState(0);
+  const [newPhoneNumber, setNewPhoneNumber] = useState("");
+  const [newMessage, setNewMessage] = useState("");
+  const [showNewForm, setShowNewForm] = useState(false);
+
+  // Indicates whether conversation has loaded at least once for the current phone/backend
+  const [conversationHasLoaded, setConversationHasLoaded] = useState(false);
+  // Show skeleton if !conversationHasLoaded when we first do the load
+  const [loadingConv, setLoadingConv] = useState(false);
+
+  /**
+   * Loads the unified inbox from all userBackends, sorts to float unresponded
+   * messages (where !fromYou && unread) to top.
+   */
+  async function loadInbox() {
+    try {
+      // 1. Fetch from each backend
+      const results = await Promise.all(
+        userBackends.map(async (b, index) => {
+          const r = await fetch(`${b.base_url}/messages`);
+          if (!r.ok) throw new Error(await r.text());
+          const data = await r.json();
+          // Each item might look like: { phoneNumber, snippet, timestamp, unread, fromYou, ... }
+          return data.map((item) => ({
+            ...item,
+            backendIndex: index,
+            backendUrl: b.base_url,
+          }));
+        })
+      );
+
+      // 2. Flatten
+      const flattened = results.flat();
+
+      // 3. Sort so unresponded => top
+      const sorted = flattened.sort((a, b) => {
+        const aIsUnresp = !a.fromYou && a.unread ? 1 : 0;
+        const bIsUnresp = !b.fromYou && b.unread ? 1 : 0;
+        return bIsUnresp - aIsUnresp; // descending
+      });
+
+      setPreviews(sorted);
+    } catch (err) {
+      console.error("Inbox error:", err.message);
+    }
+  }
+
+  // Load inbox on mount + refresh every 5s
+  useEffect(() => {
+    if (!userBackends?.length) return;
+    loadInbox();
+    const id = setInterval(loadInbox, 5000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userBackends]);
+
+  /**
+   * If we have a selected conversation, load it every 5s.
+   * We only show skeleton if conversationHasLoaded == false.
+   */
+  useEffect(() => {
+    if (!selectedPhone || selectedBackendIndex == null) {
+      setConversation([]);
+      return;
+    }
+
+    async function loadConversation() {
+      // Only show skeleton if this conversation hasn't loaded yet
+      if (!conversationHasLoaded) {
+        setLoadingConv(true);
+      }
+      try {
+        const chosenBackend = userBackends[selectedBackendIndex];
+        if (!chosenBackend) return;
+        const r = await fetch(
+          `${chosenBackend.base_url}/conversation?phone=${encodeURIComponent(
+            selectedPhone
+          )}`
+        );
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        setConversation(data);
+
+        // Now that we have data, mark that it loaded once
+        if (!conversationHasLoaded) {
+          setConversationHasLoaded(true);
+        }
+      } catch (err) {
+        console.error("Conversation error:", err.message);
+      } finally {
+        setLoadingConv(false);
+      }
+    }
+    loadConversation();
+
+    const id = setInterval(loadConversation, 5000);
+    return () => clearInterval(id);
+  }, [
+    selectedPhone,
+    selectedBackendIndex,
+    userBackends,
+    conversationHasLoaded,
+  ]);
+
+  /**
+   * Send a brand-new message
+   */
+  async function handleSendNew() {
+    setStatus("Sending new message...");
+    try {
+      const chosen = userBackends[newSelectedBackend];
+      if (!chosen) throw new Error("Invalid backend index");
+
+      const res = await fetch(`${chosen.base_url}/send-message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: newPhoneNumber,
+          text: newMessage,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const responseText = await res.text();
+      setStatus(responseText);
+      setNewPhoneNumber("");
+      setNewMessage("");
+    } catch (err) {
+      setStatus("Error: " + err.message);
+    }
+  }
+
+  // If user has no backends => simple message
+  if (!userBackends?.length) {
+    return (
+      <div className="p-6 h-screen overflow-hidden">
+        <Heading>No backends found for your account.</Heading>
+        <Text>
+          Please add rows to your <code>backends</code> table or create a UI to
+          do so.
+        </Text>
+      </div>
+    );
+  }
+
+  /**
+   * On selecting a preview => reset conversationHasLoaded, so that we
+   * show skeleton again if user picks a different conversation.
+   */
+  function selectPreview(phone, backendIndex) {
+    setSelectedPhone(phone);
+    setSelectedBackendIndex(backendIndex);
+    setStatus("");
+    setShowNewForm(false);
+
+    // Reset so next load triggers skeleton again
+    setConversationHasLoaded(false);
+    setConversation([]);
+  }
+
+  return (
+    // Full screen height, hidden overflow => no page scrollbar
+    <div className="h-screen overflow-hidden flex">
+      {/* LEFT column: The inbox */}
+      <div className="w-80 flex-shrink-0 border-r border-zinc-700 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <Heading level={3} className="!m-0">
+            Unified Inbox
+          </Heading>
+          <Button
+            color="cyan"
+            onClick={() => {
+              setSelectedPhone("");
+              setSelectedBackendIndex(null);
+              setShowNewForm(true);
+              setStatus("");
+            }}
+          >
+            Send Message
+          </Button>
+        </div>
+
+        <div
+          className="flex flex-col gap-3 h-[calc(100vh-100px)] overflow-y-auto pr-1"
+          style={{
+            scrollbarWidth: "thin",
+            scrollbarColor: "#666 #2f2f2f",
+          }}
+        >
+          {previews.map((p, idx) => {
+            const isActive =
+              p.phoneNumber === selectedPhone &&
+              p.backendIndex === selectedBackendIndex;
+            return (
+              <div
+                key={idx}
+                className={`border rounded p-4 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                  isActive
+                    ? "border-blue-500 bg-zinc-50 dark:bg-zinc-800"
+                    : "border-zinc-200 dark:border-zinc-700"
+                }`}
+                onClick={() => selectPreview(p.phoneNumber, p.backendIndex)}
+              >
+                <Text className="text-sm font-medium !m-0">
+                  From: {p.phoneNumber}
+                </Text>
+                <Text
+                  className={`!mt-1 ${
+                    p.unread ? "font-bold" : "font-normal"
+                  } break-words`}
+                >
+                  {p.snippet} {p.fromYou && "(You)"}
+                </Text>
+                <Text className="text-xs text-zinc-500 !mt-1 !mb-0">
+                  {p.timestamp}
+                </Text>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* RIGHT column: conversation area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {showNewForm ? (
+            <>
+              <Heading level={3}>Send a brand-new message</Heading>
+              <Fieldset className="mt-4 space-y-3">
+                <FieldGroup>
+                  <Field>
+                    <Label>Backend</Label>
+                    <select
+                      className="mt-1 block w-full rounded border border-zinc-300 bg-white dark:bg-zinc-800 dark:border-zinc-700 text-sm p-2"
+                      value={newSelectedBackend}
+                      onChange={(e) => setNewSelectedBackend(Number(e.target.value))}
+                    >
+                      {userBackends.map((b, i) => (
+                        <option key={b.id} value={i}>
+                          Backend #{i} - {b.base_url}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field>
+                    <Label>Phone</Label>
+                    <Input
+                      className="mt-1 w-full"
+                      value={newPhoneNumber}
+                      onChange={(e) => setNewPhoneNumber(e.target.value)}
+                    />
+                  </Field>
+                  <Field>
+                    <Label>Message</Label>
+                    <Textarea
+                      className="mt-1 w-full"
+                      rows={5}
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                    />
+                  </Field>
+                </FieldGroup>
+              </Fieldset>
+
+              <Button color="cyan" className="mt-3" onClick={handleSendNew}>
+                Send Message
+              </Button>
+              {status && (
+                <Text className="mt-2 text-sm text-rose-600 dark:text-rose-400">
+                  {status}
+                </Text>
+              )}
+            </>
+          ) : selectedPhone && selectedBackendIndex != null ? (
+            <>
+              <Heading level={3}>Conversation with {selectedPhone}</Heading>
+
+              {loadingConv ? (
+                <ConversationSkeleton />
+              ) : conversation.length === 0 ? (
+                <Text className="mt-3">No messages yet.</Text>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {conversation.map((msg, i) => {
+                    const isFromMe = msg.direction === "outgoing";
+                    return (
+                      <div
+                        key={i}
+                        className={`flex mb-2 ${
+                          isFromMe ? "justify-end" : "justify-start"
+                        }`}
+                      >
+                        <div
+                          className={`flex flex-col ${
+                            isFromMe ? "items-end" : "items-start"
+                          }`}
+                        >
+                          <div
+                            className={`inline-block px-3 py-2 max-w-[80%] whitespace-pre-wrap break-words rounded-lg ${
+                              isFromMe
+                                ? "bg-cyan-100 text-black"
+                                : "bg-zinc-100 dark:bg-zinc-800 text-black dark:text-white"
+                            }`}
+                          >
+                            {msg.text}
+                          </div>
+                          <div className="text-xs text-zinc-500 mt-1">
+                            {msg.time}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <Heading level={3}>Select a conversation.</Heading>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shows 2-line skeleton: first from me (right), then from them (left).
+ */
+function ConversationSkeleton() {
+  // We'll define an array [true => me, false => them]
+  const layout = [true, false];
+
+  return (
+    <div className="mt-3 space-y-3">
+      {layout.map((isMe, i) => (
+        <div
+          key={i}
+          className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2 animate-pulse`}
+        >
+          <div className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+            {/* Bubble */}
+            <div
+              className={`inline-block px-3 py-2 max-w-[80%] rounded-lg
+                ${
+                  isMe
+                    ? "bg-cyan-200"
+                    : "bg-zinc-200 dark:bg-zinc-700"
+                }`}
+            >
+              <div className="h-3 w-24" />
+            </div>
+            {/* Time placeholder */}
+            <div className="text-xs text-zinc-500 mt-1">
+              <div className="h-2 w-10 bg-zinc-300 dark:bg-zinc-600 rounded" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
