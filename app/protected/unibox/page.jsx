@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
-import UniboxClient from "./unibox-client"; // We'll define a separate client component
+import UniboxClient from "./unibox-client";
 
 export default async function ProtectedPage() {
   const supabase = await createClient();
@@ -12,20 +12,22 @@ export default async function ProtectedPage() {
     return <div>No user session found!</div>;
   }
 
-  const { data: backends, error: beError } = await supabase
-    .from("backends")
-    .select("id, base_url, created_at")
-    .eq("user_id", user.id); 
+  // Query the inboxes table, joining with backends to get the base_url.
+  const { data: inboxes, error: inboxError } = await supabase
+    .from("inboxes")
+    .select("*, backend:backends(base_url)")
+    .eq("user_id", user.id)
+    .order("last_message_timestamp", { ascending: false });
 
-  if (beError) {
-    return <div>Error loading backends: {beError.message}</div>;
+  if (inboxError) {
+    return <div>Error loading messages: {inboxError.message}</div>;
   }
 
-  const userBackends = backends || [];
+  const userInboxes = inboxes || [];
 
   return (
     <section>
-      <UniboxClient userBackends={userBackends} />
+      <UniboxClient userInboxes={userInboxes} />
     </section>
   );
 }
